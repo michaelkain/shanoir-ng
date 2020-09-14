@@ -19,6 +19,7 @@ import javax.swing.tree.TreePath;
 import org.apache.log4j.Logger;
 import org.shanoir.dicom.importer.Serie;
 import org.shanoir.dicom.model.DicomTreeNode;
+import org.shanoir.uploader.ShUpConfig;
 import org.shanoir.uploader.dicom.query.Patient;
 import org.shanoir.uploader.dicom.query.Study;
 import org.shanoir.uploader.gui.MainWindow;
@@ -161,8 +162,11 @@ public class SelectionActionListener implements TreeSelectionListener {
 			}
 
 			if (dicomData != null) {
-				mainWindow.noAnonR.setEnabled(true);
-				mainWindow.yesAnonR.setEnabled(true);
+				// in case of OFSEP: do not allow change of radio buttons (asked by SL)
+				if (!ShUpConfig.isModePseudonymus()) {
+					mainWindow.noAnonR.setEnabled(true);
+					mainWindow.yesAnonR.setEnabled(true);					
+				}
 				mainWindow.lastNameTF.setText(dicomData.getLastName());
 				mainWindow.lastNameTF.setEnabled(true);
 				mainWindow.birthNameCopyButton.setEnabled(true);
