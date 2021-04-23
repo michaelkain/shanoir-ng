@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Anonymization serviceImpl. mkain: bug fixing done for multi-threading errors,
+ * Pseudonymization serviceImpl. mkain: bug fixing done for multi-threading errors,
  * e.g. when used by server. bug fixed for identical media storage sop instance
  * uid and sop instance uid and bug fixed for invalid uid generation.
  * 
@@ -92,7 +92,7 @@ public class AnonymizationServiceImpl implements AnonymizationService {
 	public void anonymizeForShanoir(ArrayList<File> dicomFiles, String profile, String patientName, String patientID) throws Exception {
 		long startTime = System.currentTimeMillis();
 		final int totalAmount = dicomFiles.size();
-		LOG.info("Start anonymization, for {} DICOM files.", totalAmount);
+		LOG.info("Start pseudonymization, for {} DICOM files with profile {}.", totalAmount, profile);
 		Map<String, Profile> profiles = AnonymizationRulesSingleton.getInstance().getProfiles();
 		Map<String, String> anonymizationMap = profiles.get(profile).getAnonymizationMap();
 		tagsToDeleteForManufacturer = AnonymizationRulesSingleton.getInstance().getTagsToDeleteForManufacturer();
@@ -101,7 +101,7 @@ public class AnonymizationServiceImpl implements AnonymizationService {
 		Map<String, String> seriesInstanceUIDs = new HashMap<>();
 		Map<String, String> studyInstanceUIDs = new HashMap<>();
 		Map<String, String> studyIds = new HashMap<>();
-		LOG.debug("anonymize : totalAmount={}", totalAmount);
+		LOG.debug("Pseudonymization: totalAmount={}", totalAmount);
 		int current = 0;
 		for (int i = 0; i < dicomFiles.size(); ++i) {
 			final File file = dicomFiles.get(i);
@@ -109,9 +109,9 @@ public class AnonymizationServiceImpl implements AnonymizationService {
 			performAnonymization(file, anonymizationMap, true, patientName, patientID, seriesInstanceUIDs, studyInstanceUIDs, studyIds);
 			current++;
 			final int currentPercent = current * 100 / totalAmount;
-			LOG.debug("anonymize : anonymization current percent= {} %", currentPercent);
+			LOG.debug("Pseudonymization: pseudonymization current percent= {} %", currentPercent);
 		}
-		logInfos("End anonymization", startTime);
+		logInfos("End pseudonymization", startTime);
 	}
 	
 	private void logInfos(final String methodName, long startTime) {
@@ -124,7 +124,6 @@ public class AnonymizationServiceImpl implements AnonymizationService {
 			String patientBirthDate) {
 		anonymizeTagAccordingToVR(attributes, Tag.PatientName, patientName);
 		anonymizeTagAccordingToVR(attributes, Tag.PatientID, patientID);
-
 		// patient birth date
 		if (patientBirthDate != null && patientBirthDate.length() != 0) {
 			String newDate = patientBirthDate.substring(0, 4) + "01" + "01";
