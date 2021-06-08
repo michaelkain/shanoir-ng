@@ -5,7 +5,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -31,6 +32,9 @@ import org.shanoir.uploader.utils.ProxyUtil;
 import org.shanoir.uploader.utils.Util;
 import org.springframework.http.HttpHeaders;
 
+import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
+
 /**
  * This class intends to be used as a binary executable to download datasets
  * from a remote Shanoir server to the local file system.
@@ -39,8 +43,13 @@ import org.springframework.http.HttpHeaders;
  */
 public final class ShanoirDownloader extends ShanoirCLI {
 
+	private static Logger logger = Logger.getLogger(ShanoirCLI.class);
+
 	/** -datasetId to set the id of the dataset to download. */
 	private static Option datasetIdOption;
+
+	/** -datasetIds to set the path to the file containing the ids (one id per line) of the dataset to download. */
+	private static Option datasetIdsOption;
 
 	/** -subjectId to set the id of the subject to download. */
 	private static Option subjectIdOption;
@@ -56,7 +65,7 @@ public final class ShanoirDownloader extends ShanoirCLI {
 	private static Option destDirOption;
 
 	/** The Constant EXAMPLE. */
-	private static final String EXAMPLE = "downloadDataset -destDir /tmp/dataset123 -host shanoir-qualif.irisa.fr -datasetId 123\n"
+	private static final String EXAMPLE = "downloadDataset -destDir /tmp/dataset123 -profile OFSEP-NG -datasetId 123\n"
 			+ "=> download the dataset 123 to the destination directory /tmp/dataset123.";
 	/**
 	 * -refDatasetExpressionFormatId to set the id of the ref dataset expression
@@ -67,9 +76,7 @@ public final class ShanoirDownloader extends ShanoirCLI {
 	/** -h used to request help on command line options. */
 	private static Option helpOption;
 	/** The Constant USAGE. */
-	private static final String USAGE = "downloadDataset [Options] -datasetId <ID> -host <HOST>";
-
-	private static final String NG_PROFILE = "dev-NG";
+	private static final String USAGE = "downloadDataset [Options] -datasetId <ID> -profile <PROFILE>";
 
 	/** -v returns the version of the application. */
 	private static Option versionOption;
@@ -84,12 +91,21 @@ public final class ShanoirDownloader extends ShanoirCLI {
 		OptionBuilder.withDescription("print the version information and exit");
 		versionOption = OptionBuilder.create("v");
 	}
+
 	static {
 		OptionBuilder.withArgName("datasetId");
 		OptionBuilder.hasArg();
 		OptionBuilder.isRequired(false);
 		OptionBuilder.withDescription("The dataset id.");
 		datasetIdOption = OptionBuilder.create("datasetId");
+	}
+
+	static {
+		OptionBuilder.withArgName("datasetIds");
+		OptionBuilder.hasArg();
+		OptionBuilder.isRequired(false);
+		OptionBuilder.withDescription("Path to a file containing the dataset ids to download (a .txt file containing one dataset id per line).");
+		datasetIdsOption = OptionBuilder.create("datasetIds");
 	}
 
 	static {
@@ -149,6 +165,7 @@ public final class ShanoirDownloader extends ShanoirCLI {
 		opts.addOption(helpOption);
 		opts.addOption(versionOption);
 		opts.addOption(datasetIdOption);
+		opts.addOption(datasetIdsOption);
 		opts.addOption(subjectIdOption);
 		opts.addOption(studyIdOption);
 		opts.addOption(destDirOption);
@@ -174,6 +191,8 @@ public final class ShanoirDownloader extends ShanoirCLI {
 	/** Our business Service. */
 	private ShanoirUploaderServiceClientNG shanoirUploaderServiceClientNG;
 
+	private static final String LOG4J_PROPERTIES = "log4j.properties";
+
 	/**
 	 * @param opts
 	 *            the specific options of the command line
@@ -182,14 +201,49 @@ public final class ShanoirDownloader extends ShanoirCLI {
 		super(opts, DESCRIPTION, EXAMPLE, USAGE);
 	}
 
+	/**
+	 * Initialize personal properties folder of ShanoirUploader.
+	 */
+	private void initShanoirUploaderFolder() {
+		final String userHomeFolderPath = System.getProperty(ShUpConfig.USER_HOME);
+		final String shanoirUploaderFolderPath = userHomeFolderPath
+				+ File.separator + ShUpConfig.SU + "_" + ShUpConfig.SHANOIR_UPLOADER_VERSION;
+		final File shanoirUploaderFolder = new File(shanoirUploaderFolderPath);
+		boolean shanoirUploaderFolderExists = shanoirUploaderFolder.exists();
+		if (shanoirUploaderFolderExists) {
+			// do nothing
+		} else {
+			shanoirUploaderFolder.mkdirs();
+		}
+		ShUpConfig.shanoirUploaderFolder = shanoirUploaderFolder;
+	}
+
+	/**
+	 * Initialize the logging.
+	 */
+	private void initLogging() {
+		try {
+			Properties log4jProperties = new Properties();
+			initProperties(LOG4J_PROPERTIES, log4jProperties);
+			log4jProperties.put("log4j.appender.file.File",
+					ShUpConfig.shanoirUploaderFolder.getAbsolutePath() + File.separator + "su.log");
+			PropertyConfigurator.configure(log4jProperties);
+			logger.info("Logging successfully initialized.");
+		} catch (Exception e) {
+			// System.out here, as error in logging init, only exception
+			System.out.println("Init logging error: " + e.getMessage());
+		}
+	}
+
 	public void initialize() {
+		initShanoirUploaderFolder();
+		initLogging();
 		initProperties(ShUpConfig.BASIC_PROPERTIES, ShUpConfig.basicProperties);
 		// setup proxy on using proxy.properties in .su_v7.0.1 normally, if not from .jar
 		initProperties(ShUpConfig.PROXY_PROPERTIES, ShUpConfig.proxyProperties);
 		ProxyUtil.initializeSystemProxy();
-		initProperties(ShUpConfig.PROFILE_DIR + NG_PROFILE + "/" + ShUpConfig.PROFILE_PROPERTIES,
+		initProperties(ShUpConfig.PROFILE_DIR + profile + "/" + ShUpConfig.PROFILE_PROPERTIES,
 				ShUpConfig.profileProperties);
-		ShUpConfig.profileProperties.setProperty("shanoir.server.url", getHost());
 	}
 
 	/**
@@ -346,7 +400,19 @@ public final class ShanoirDownloader extends ShanoirCLI {
 				format = Long.parseLong(cl.getOptionValue("formatId")) == 6 ? "dcm" : "nii";
 			}
 
-			if (cl.hasOption("datasetId")) {
+			if (cl.hasOption("datasetIds")) {
+				String filePath = cl.getOptionValue("datasetIds");
+				try {
+					List<String> allLines = Files.readAllLines(Paths.get(filePath));
+					for (String line : allLines) {
+						Long datasetId = Long.parseLong(line);
+						downloadDataset(destDir, datasetId, format, shanoirUploaderServiceClientNG);
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+			else if (cl.hasOption("datasetId")) {
 				Long datasetId = Long.parseLong(cl.getOptionValue("datasetId"));
 				downloadDataset(destDir, datasetId, format, shanoirUploaderServiceClientNG);
 
