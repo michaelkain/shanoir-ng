@@ -3,7 +3,7 @@
 print_help()
 {
 	cat <<EOF
-Build and deploy Shanoir NG
+Build and deploy Shanoir-NG
 usage:
 	$0 --clean|--force|--no-deploy [--no-build] [--no-keycloak] [--no-dcm4chee] [-h|--help]
 
@@ -18,8 +18,9 @@ Options:
 --no-deploy	skip the deployment stage
 
 --no-build	skip the build stage
---no-keycloak do not run Keycloak (used if Keycloak is external)
---no-dcm4chee do not run dcm4chee (used if dcm4chee is external)
+--no-keycloak   do not run Keycloak (used if Keycloak is external)
+--no-dcm4chee   do not run dcm4chee (used if dcm4chee is external)
+--no-database   do not run any database (keycloak-database, database, dcm4chee-database) (used if all databases are external)
 -h|--help	print this help
 
 EOF
@@ -62,6 +63,7 @@ build=1
 deploy=1
 keycloak=1
 dcm4chee=1
+database=1
 clean=
 force=
 while [ $# -ne 0 ] ; do
@@ -70,8 +72,9 @@ while [ $# -ne 0 ] ; do
 		--clean)	clean=1		;;
 		--force)	force=1		;;
 		--no-build)	build=		;;
-		--no-keycloak)	keycloak=		;;
-		--no-dcm4chee)	dcm4chee=		;;
+		--no-keycloak)	keycloak=	;;
+		--no-dcm4chee)	dcm4chee=	;;
+		--no-database)	database=	;;
 		--no-deploy)	deploy=		;;
 		*)		die "unknown option '$1'"
 	esac
@@ -91,7 +94,7 @@ if [ -n "$build" ] ; then
 	# 1. build a docker image with the java toolchain
 	DEV_IMG=shanoir-ng-dev
 	docker build -t "$DEV_IMG" - <<EOF
-FROM debian:buster
+FROM debian:bullseye
 RUN apt-get update && apt-get install -qqy --no-install-recommends openjdk-11-jdk-headless maven bzip2 git
 EOF
 	# 2. run the maven build
@@ -131,15 +134,19 @@ if [ -n "$deploy" ] ; then
 	#
 
 	# 1. database
-	step "init: database"
-	docker compose up -d database
-	wait_tcp_ready database 3306
+	if [ -n "$database" ] ; then
+		step "init: database"
+		docker compose up -d database
+		wait_tcp_ready database 3306
+	fi
 
 	# 2. keycloak-database + keycloak
 	if [ -n "$keycloak" ] ; then
-		step "init: keycloak-database"
-		docker compose up -d keycloak-database
-		wait_tcp_ready keycloak-database 3306
+		if [ -n "$database" ] ; then
+			step "init: keycloak-database"
+			docker compose up -d keycloak-database
+			wait_tcp_ready keycloak-database 3306
+		fi
 		
 		step "init: keycloak"
 		docker compose run --rm -e SHANOIR_MIGRATION=init keycloak
@@ -149,7 +156,6 @@ if [ -n "$deploy" ] ; then
 		utils/oneshot --pgrp '\| *'				\
 				' INFO  \[io.quarkus\] .* Keycloak .* started in [0-9]*'	\
 				-- docker compose logs --no-color --follow keycloak >/dev/null
-
 	fi
 
 	# 3. infrastructure services: dcm4chee
@@ -157,8 +163,10 @@ if [ -n "$deploy" ] ; then
 		step "start: infrastructure services: dcm4chee"
 		for infra_ms_dcm4chee in ldap dcm4chee-database dcm4chee-arc
 		do
-			step "start: $infra_ms_dcm4chee infrastructure microservices dcm4chee"
-			docker compose up -d "$infra_ms_dcm4chee"
+			if [ -n "$database" ] || [ "$infra_ms_dcm4chee" != dcm4chee-database ] ; then
+				step "start: $infra_ms_dcm4chee infrastructure microservices dcm4chee"
+				docker compose up -d "$infra_ms_dcm4chee"
+			fi
 		done
 	fi
 	
