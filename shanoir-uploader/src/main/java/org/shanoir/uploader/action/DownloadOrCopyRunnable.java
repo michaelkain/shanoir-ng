@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
 import org.shanoir.ng.importer.dicom.ImagesCreatorAndDicomFileAnalyzerService;
@@ -56,6 +57,7 @@ public class DownloadOrCopyRunnable implements Runnable {
 
 	@Override
 	public void run() {
+		selectedSeries = selectedSeries.stream().filter(s -> !s.getSerie().isErroneous() && !s.getSerie().isIgnored()).collect(Collectors.toSet());;
 		File uploadFolder = ImportUtils.createUploadFolder(dicomServerClient.getWorkFolder(), dicomData);
 		List<String> allFileNames = null;
 		try {

@@ -258,11 +258,9 @@ public class FindDicomActionListener extends JPanel implements ActionListener {
 				List<Serie> series = study.getSeries();
 				for (Iterator iterator3 = series.iterator(); iterator3.hasNext();) {
 					Serie serie = (Serie) iterator3.next();
-					if (!serie.isErroneous() && !serie.isIgnored()) {
-						final SerieTreeNode serieTreeNode = studyTreeNode.initChildTreeNode(serie);
-						// add series
-						studyTreeNode.addTreeNode(serieTreeNode.getId(), serieTreeNode);
-					}
+					final SerieTreeNode serieTreeNode = studyTreeNode.initChildTreeNode(serie);
+					// add series
+					studyTreeNode.addTreeNode(serieTreeNode.getId(), serieTreeNode);
 				}
 				
 			}
