@@ -40,7 +40,7 @@ test('expert-subject-examination-create-delete', async ({ page }) => {
   await expect(page.locator('form')).toContainText('center-' + randomString);
   await page.getByRole('button', { name: 'Save' }).click();
   await page.getByRole('button', { name: 'No' }).click();
-  await expect(page.getByRole('heading')).toContainText('Details on study', { timeout: 10000});
+  await expect(page.getByRole('heading', { name: /Details on study/ })).toBeVisible({ timeout: 10000});
   await logout(page);
 
   // role-admin: validate study draft
