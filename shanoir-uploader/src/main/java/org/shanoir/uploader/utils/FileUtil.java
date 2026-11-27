@@ -146,17 +146,17 @@ public class FileUtil {
                     + File.separator + studyInstanceUID
                     + File.separator + seriesInstanceUID);
             if (serieFolder.exists()) {
-                List<Instance> instances = new ArrayList<>();
-                File[] serieFiles = serieFolder.listFiles();
-                for (int i = 0; i < serieFiles.length; i++) {
-                    String dicomFileName = serieFiles[i].getName();
+                List<Instance> instancesFromFolder = new ArrayList<>();
+                File[] serieFilesInFolder = serieFolder.listFiles();
+                for (int i = 0; i < serieFilesInFolder.length; i++) {
+                    String dicomFileName = serieFilesInFolder[i].getName();
                     fileNamesForSerie.add(dicomFileName);
-                    File sourceFileFromPacs = serieFiles[i];
+                    File sourceFileFromPacs = serieFilesInFolder[i];
                     try (DicomInputStream dIS = new DicomInputStream(sourceFileFromPacs)) { // keep try to finally close input stream
                         Attributes attributes = dIS.readDataset();
                         if (!DicomSerieAndInstanceAnalyzer.checkInstanceIsIgnored(attributes)) {
                             Instance instance = new Instance(attributes);
-                            instances.add(instance);
+                            instancesFromFolder.add(instance);
                             File destSerieFolder = new File(uploadFolder.getAbsolutePath() + File.separator + seriesInstanceUID);
                             if (!destSerieFolder.exists())
                                 destSerieFolder.mkdirs();
@@ -166,10 +166,10 @@ public class FileUtil {
                         }
                     }
                 }
-                serie.setInstances(instances);
-                if (!instances.isEmpty()) {
-                    instances.sort(new InstanceNumberSorter());
-                    LOG.info(instances.size() + " instances found for serie " + serie.getSeriesDescription());
+                serie.setInstances(instancesFromFolder);
+                if (!instancesFromFolder.isEmpty()) {
+                    instancesFromFolder.sort(new InstanceNumberSorter());
+                    LOG.info(instancesFromFolder.size() + " instances found in folder for serie " + serie.getSeriesDescription());
                 } else {
                     LOG.warn("Serie found with empty instances and therefore ignored (SeriesDescription: {}, SerieInstanceUID: {}).", serie.getSeriesDescription(), serie.getSeriesInstanceUID());
                     serie.setIgnored(true);
@@ -179,12 +179,12 @@ public class FileUtil {
                         + (serie.getSeriesNumber() != null ? "(No. " + serie.getSeriesNumber() + ") " : "")
                         + serie.getSeriesDescription()
                         + " downloaded with " + fileNamesForSerie.size() + " images.\n");
-                if (serie.getInstances().size() != fileNamesForSerie.size()) {
+                if (fileNamesForSerie.size() != serie.getInstances().size()) {
                     downloadOrCopyReport.append("Error: Download: serie "
                             + (serie.getSeriesNumber() != null ? "(No. " + serie.getSeriesNumber() + ") " : "")
                             + serie.getSeriesDescription()
                             + " downloaded with " + fileNamesForSerie.size()
-                            + " images not equal to instances in the DICOM server: " + serie.getInstances().size() + ".\n");
+                            + " images not equal to instances created from the folder: " + serie.getInstances().size() + ".\n");
                 }
                 if (serie.getNumberOfSeriesRelatedInstances() != null
                         && serie.getNumberOfSeriesRelatedInstances().intValue() != 0
